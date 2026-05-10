@@ -4,9 +4,9 @@ valid:
   - |
     const payload = await response.json();
   - |
-    const payload = yield* Schema.decodeUnknown(ApiResponse)(await response.json());
+    const payload = yield* Schema.decodeUnknownEffect(ApiResponse)(await response.json());
   - |
-    const config = yield* Schema.decodeUnknown(AppConfig)(JSON.parse(body));
+    const config = yield* Schema.decodeUnknownEffect(AppConfig)(JSON.parse(body));
   - |
     const raw: unknown = JSON.parse(body);
   - |

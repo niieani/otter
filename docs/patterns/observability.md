@@ -45,28 +45,39 @@ bun add effect @effect/opentelemetry @opentelemetry/sdk-trace-base @opentelemetr
 
 ## OTLP Exporter (Production / Jaeger / Grafana)
 
-Effect includes a lightweight OTLP module that sends traces, logs, and metrics over HTTP — no heavy SDK dependencies needed.
+Effect v4 includes lightweight OTLP modules that send traces and logs over HTTP.
 
 ```typescript
-import * as Otlp from "@effect/opentelemetry/Otlp";
-import * as OtlpSerialization from "@effect/opentelemetry/OtlpSerialization";
-import { FetchHttpClient } from "@effect/platform";
+import { FetchHttpClient } from "effect/unstable/http";
+import { OtlpLogger, OtlpSerialization, OtlpTracer } from "effect/unstable/observability";
 import * as Layer from "effect/Layer";
 
-// Send to a local Jaeger/Grafana Tempo/Honeycomb endpoint
-const TracingLive = Otlp.layerJson({
-  baseUrl: "http://localhost:4318",
+const OtlpTracingLive = OtlpTracer.layer({
+  url: "http://localhost:4318/v1/traces",
   resource: {
     serviceName: "my-service",
     serviceVersion: "1.0.0",
   },
-}).pipe(Layer.provide(FetchHttpClient.layer));
+});
+
+const OtlpLoggingLive = OtlpLogger.layer({
+  url: "http://localhost:4318/v1/logs",
+  resource: {
+    serviceName: "my-service",
+    serviceVersion: "1.0.0",
+  },
+});
+
+export const ObservabilityLive = Layer.merge(OtlpTracingLive, OtlpLoggingLive).pipe(
+  Layer.provide(OtlpSerialization.layerJson),
+  Layer.provide(FetchHttpClient.layer),
+);
 ```
 
 ### Required packages (OTLP)
 
 ```bash
-bun add effect @effect/opentelemetry @effect/platform
+bun add effect @effect/opentelemetry @effect/platform-node
 ```
 
 ## Env-Var-Gated Tracing
@@ -90,18 +101,16 @@ Wire `TracingLive` into your `AppContext` layer. When `EFFECT_TRACE` is unset, t
 
 ## Structured Logging with Span Context
 
-Replace the default logger with `Logger.json` + `Logger.withSpanAnnotations` to get machine-readable logs with trace correlation:
+Replace the default logger with `Logger.consoleJson` to get machine-readable logs:
 
 ```typescript
 import { Logger } from "effect";
 
-const DevLoggingLive = Logger.replace(
-  Logger.defaultLogger,
-  Logger.jsonLogger.pipe(Logger.withSpanAnnotations),
-);
+const DevLoggingLive = Logger.layer([Logger.consoleJson], { mergeWithExisting: false });
 ```
 
-Every log line gets `effect.traceId`, `effect.spanId`, and `effect.spanName` as structured fields. This makes logs searchable and correlated with their parent spans.
+Logs emitted inside spans are correlated by the active runtime/tracer. Keep log
+messages stable and pass fields as separate structured arguments.
 
 Pair with the `no-interpolated-logging` ast-grep rule -- when logs are structured JSON, string interpolation in log messages defeats the purpose. Pass data as separate arguments instead.
 

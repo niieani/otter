@@ -7,10 +7,10 @@ valid:
       return result;
     });
   - |
-    // Runtime.runPromise is fine at boundaries
+    // ManagedRuntime.runPromise is fine at boundaries
     app.get("/api/data", async (c) => {
       const runtime = c.get("runtime");
-      return Runtime.runPromise(runtime)(getDataEffect);
+      return runtime.runPromise(getDataEffect);
     });
   - |
     const result = yield* Effect.flatMap(

@@ -1,0 +1,107 @@
+id: no-effect-v3-apis
+snapshots:
+  ? |
+    await Runtime.runPromise(runtime)(program);
+  : labels:
+      - source: Runtime.runPromise(runtime)
+        style: primary
+        start: 6
+        end: 33
+  ? |
+    class Database extends Context.Tag("Database")<Database, Service>() {}
+  : labels:
+      - source: Context.Tag("Database")
+        style: primary
+        start: 23
+        end: 46
+  ? |
+    class Logger extends Effect.Service<Logger>()("Logger", { effect: makeLogger }) {}
+  : labels:
+      - source: 'Effect.Service<Logger>()("Logger", { effect: makeLogger })'
+        style: primary
+        start: 21
+        end: 79
+  ? |
+    const Database = Context.GenericTag<Service>("Database");
+  : labels:
+      - source: Context.GenericTag<Service>("Database")
+        style: primary
+        start: 17
+        end: 56
+  ? |
+    const data = yield* Schema.decode(MySchema)(input);
+  : labels:
+      - source: Schema.decode(MySchema)
+        style: primary
+        start: 20
+        end: 43
+  ? |
+    const data = yield* Schema.decodeUnknown(MySchema)(input);
+  : labels:
+      - source: Schema.decodeUnknown(MySchema)
+        style: primary
+        start: 20
+        end: 50
+  ? |
+    const fiber = yield* Effect.fork(task);
+  : labels:
+      - source: Effect.fork(task)
+        style: primary
+        start: 21
+        end: 38
+  ? |
+    const fiber = yield* Effect.forkDaemon(task);
+  : labels:
+      - source: Effect.forkDaemon(task)
+        style: primary
+        start: 21
+        end: 44
+  ? |
+    const id = Schema.UUID;
+  : labels:
+      - source: Schema.UUID
+        style: primary
+        start: 11
+        end: 22
+  ? |
+    const name = Schema.String.pipe(Schema.pattern(/^[a-z]+$/));
+  : labels:
+      - source: Schema.pattern(/^[a-z]+$/)
+        style: primary
+        start: 32
+        end: 58
+  ? |
+    const result = Schema.decodeUnknownEither(MySchema)(input);
+  : labels:
+      - source: Schema.decodeUnknownEither(MySchema)
+        style: primary
+        start: 15
+        end: 51
+  ? |
+    const schema = Schema.parseJson(MySchema);
+  : labels:
+      - source: Schema.parseJson(MySchema)
+        style: primary
+        start: 15
+        end: 41
+  ? |
+    program.pipe(Effect.catchAll((error) => Effect.logError("failed", error)))
+  : labels:
+      - source: Effect.catchAll((error) => Effect.logError("failed", error))
+        style: primary
+        start: 13
+        end: 73
+  ? |
+    program.pipe(Effect.catchAllCause((cause) => Effect.logError("failed", cause)))
+  : labels:
+      - source: Effect.catchAllCause((cause) => Effect.logError("failed", cause))
+        style: primary
+        start: 13
+        end: 78
+  ? |
+    program.pipe(Effect.catchSome(handler))
+  : labels:
+      - source: Effect.catchSome(handler)
+        style: primary
+        start: 13
+        end: 38

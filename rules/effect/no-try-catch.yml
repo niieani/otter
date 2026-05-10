@@ -21,7 +21,7 @@ note: |
   Effect code should avoid try-catch blocks. Use Effect's error handling:
   - Effect.try() for wrapping code that might throw
   - Effect.catchTag() for handling tagged errors
-  - Effect.catchAll() for catching all errors
+  - Effect.catch() for catching all errors
 
   Example:
   ```typescript

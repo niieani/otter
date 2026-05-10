@@ -9,6 +9,8 @@ rule:
   any:
     - pattern: Data.TaggedError($$$ARGS)
     - pattern: Schema.ErrorClass($$$ARGS)
+    - pattern: Schema.TaggedErrorClass<$TYPE>()($$$ARGS)
+    - pattern: Schema.TaggedErrorClass($$$ARGS)
 
 files:
   - "apps/**/*.ts"
@@ -17,15 +19,16 @@ files:
   - "packages/**/*.tsx"
 
 note: |
-  All error definitions (Data.TaggedError and Schema.ErrorClass) must live
-  in errors.ts for discoverability. Import and use them from there.
+  All error definitions (Schema.TaggedErrorClass, Schema.ErrorClass, and legacy
+  Data.TaggedError) must live in errors.ts for discoverability. Import and use
+  them from there.
 
   Example:
   ```typescript
   // ❌ Bad: error defined in commands/hello.ts
-  class HelloError extends Data.TaggedError("HelloError")<{
-    readonly reason: string;
-  }> {}
+  class HelloError extends Schema.TaggedErrorClass<HelloError>()("HelloError", {
+    reason: Schema.String,
+  }) {}
 
   // ✅ Good: defined in errors.ts, imported where needed
   import { HelloError } from "../errors";

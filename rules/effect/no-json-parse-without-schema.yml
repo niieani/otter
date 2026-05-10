@@ -3,19 +3,19 @@
 id: no-json-parse-without-schema
 language: tsx
 severity: error
-message: "Bare JSON.parse without schema validation - use Schema.decodeUnknown to validate parsed data"
+message: "Bare JSON.parse without schema validation - use Schema.decodeUnknownEffect to validate parsed data"
 
 rule:
   pattern: JSON.parse($$$ARGS)
   not:
     inside:
       any:
-        - pattern: Schema.decodeUnknown($SCHEMA)(JSON.parse($$$ARGS))
-        - pattern: Schema.decode($SCHEMA)(JSON.parse($$$ARGS))
+        - pattern: Schema.decodeUnknownEffect($SCHEMA)(JSON.parse($$$ARGS))
+        - pattern: Schema.decodeEffect($SCHEMA)(JSON.parse($$$ARGS))
         - pattern: Schema.decodeUnknownSync($SCHEMA)(JSON.parse($$$ARGS))
         - pattern: Schema.decodeSync($SCHEMA)(JSON.parse($$$ARGS))
-        - pattern: Schema.decodeUnknownEither($SCHEMA)(JSON.parse($$$ARGS))
-        - pattern: Schema.decodeUnknownOption($SCHEMA)(JSON.parse($$$ARGS))
+        - pattern: Schema.decodeUnknownExit($SCHEMA)(JSON.parse($$$ARGS))
+        - pattern: Schema.decodeExit($SCHEMA)(JSON.parse($$$ARGS))
       stopBy: end
 
 files:
@@ -36,7 +36,7 @@ note: |
   const data = JSON.parse(body) as MyType;
 
   // ✅ Good - schema validates and returns typed Effect
-  const data = yield* Schema.decodeUnknown(MySchema)(JSON.parse(body));
+  const data = yield* Schema.decodeUnknownEffect(MySchema)(JSON.parse(body));
 
   // ✅ Good - in non-Effect code
   const data = Schema.decodeUnknownSync(MySchema)(JSON.parse(body));

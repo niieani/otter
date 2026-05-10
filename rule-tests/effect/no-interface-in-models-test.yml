@@ -12,7 +12,7 @@ valid:
   - |
     export type Priority = Schema.Schema.Type<typeof Priority>;
   - |
-    export const Status = Schema.Literal("todo", "in-progress", "done");
+    export const Status = Schema.Literals(["todo", "in-progress", "done"]);
     export type Status = Schema.Schema.Type<typeof Status>;
   - |
     export type Ref = Data.TaggedEnum<{

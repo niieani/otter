@@ -3,7 +3,7 @@
 id: no-runpromise-in-effect
 language: tsx
 severity: error
-message: "Avoid Effect.runPromise/runSync - use yield* in Effect.gen or Runtime.runPromise at boundaries"
+message: "Avoid Effect.runPromise/runSync inside Effect code - use yield* or bridge with ManagedRuntime at boundaries"
 
 rule:
   any:
@@ -18,8 +18,8 @@ files:
 
 note: |
   Effect.runPromise and Effect.runSync should almost never appear in Effect code.
-  Use yield* within Effect.gen instead. Only use Runtime.runPromise at application
-  boundaries (like Hono handlers).
+  Use yield* within Effect.gen instead. At application boundaries (like Hono
+  handlers), build a ManagedRuntime once and call `runtime.runPromise(effect)`.
 
   Example:
   ```typescript
@@ -38,7 +38,7 @@ note: |
   // ✅ Good (at boundary)
   app.get("/api/data", async (c) => {
     const runtime = c.get("runtime");
-    return Runtime.runPromise(runtime)(getDataEffect);
+    return runtime.runPromise(getDataEffect);
   });
   ```
 

@@ -19,15 +19,15 @@ Everything else is interior code.
 
 - `Effect.promise`, `Effect.tryPromise` -- wrapping external async APIs
 - Raw `fetch`, `node:fs`, SDK clients -- if the result is wrapped as an Effect
-- `Runtime.runPromise` -- entry points only, where you leave the Effect world
+- `ManagedRuntime.make` and `runtime.runPromise(effect)` -- entry points only, where you leave the Effect world
 - `Effect.withSpan` required on all exported functions (observability at the edge)
 
 ### Interior (everything else)
 
-- No direct I/O. All external access goes through services via `Context.Tag`.
+- No direct I/O. All external access goes through services via `Context.Service`.
 - No `Effect.runPromise` / `Effect.runSync`. Stay in Effect with `yield*`.
 - No `console.*`. Use `Effect.log` / `Effect.logWarning` / `Effect.logError`.
-- Errors via `Data.TaggedError`. Services via `Context.Tag`.
+- Errors via `Schema.TaggedErrorClass`. Services via `Context.Service`.
 
 ## Boundary Patterns by App Type
 
@@ -46,19 +46,20 @@ Effect.runMain(result);
 
 ### API
 
-Build a runtime once at startup. Each request enters Effect via `Runtime.runPromise`:
+Build a managed runtime once at startup. Each request enters Effect via
+`runtime.runPromise(effect)`:
 
 ```typescript
 // server.ts (boundary)
 const runtime = ManagedRuntime.make(AppContext);
 
 // Per-request boundary
-const response = await Runtime.runPromise(runtime)(handleRequest(req));
+const response = await runtime.runPromise(handleRequest(req));
 ```
 
 ### Worker
 
-Message source feeds a per-message Effect handler. `Runtime.runPromise` at the message boundary:
+Message source feeds a per-message Effect handler. `runtime.runPromise` at the message boundary:
 
 ```typescript
 // worker.ts (boundary)
@@ -66,7 +67,7 @@ const runtime = ManagedRuntime.make(AppContext);
 
 // Per-message boundary
 for await (const message of source) {
-  await Runtime.runPromise(runtime)(handleMessage(message));
+  await runtime.runPromise(handleMessage(message));
 }
 ```
 
@@ -75,4 +76,4 @@ for await (const message of source) {
 These rules are planned but not yet implemented:
 
 - **`require-span-at-boundary`**: Scoped to `*.adapter.ts` and `adapters/**`. Ensures all exported functions use `Effect.withSpan`.
-- **`no-runpromise-in-effect` (update)**: Current rule flags `Effect.runPromise`/`runSync` inside Effect code. Will be updated to understand boundary file conventions so legitimate entry-point usage is not flagged.
+- **`no-runpromise-in-effect` (update)**: Current rule flags `Effect.runPromise`/`runSync` inside Effect code. Boundary files should bridge with a `ManagedRuntime` instance.

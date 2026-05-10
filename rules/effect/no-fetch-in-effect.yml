@@ -3,7 +3,7 @@
 id: no-fetch-in-effect
 language: tsx
 severity: error
-message: "Use @effect/platform's HttpClient instead of raw fetch wrapped in Effect.tryPromise"
+message: "Use Effect's HttpClient instead of raw fetch wrapped in Effect.tryPromise"
 
 # Matches Effect.tryPromise wrappers that contain a call to the global `fetch`,
 # covering:
@@ -34,8 +34,8 @@ files:
 
 note: |
   Wrapping raw fetch in Effect.tryPromise loses Effect's typed error channel
-  and forces manual AbortController + timeout choreography. Use
-  @effect/platform's HttpClient instead.
+  and forces manual AbortController + timeout choreography. Use Effect v4's
+  `effect/unstable/http` HttpClient instead.
 
   Example:
   ```typescript

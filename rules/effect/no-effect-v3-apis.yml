@@ -1,0 +1,63 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/typescript_rule.json
+
+id: no-effect-v3-apis
+language: tsx
+severity: error
+message: "Effect v3 API in v4 scaffold - use the v4 replacement documented in docs/patterns/effect.md"
+
+rule:
+  any:
+    - pattern: Context.Tag($$$ARGS)
+    - pattern: Context.Tag<$TYPE>($$$ARGS)
+    - pattern: Context.GenericTag($$$ARGS)
+    - pattern: Context.GenericTag<$TYPE>($$$ARGS)
+    - pattern: Effect.Tag($$$ARGS)
+    - pattern: Effect.Tag<$TYPE>($$$ARGS)
+    - pattern: Effect.Service($$$ARGS)
+    - pattern: Effect.Service<$TYPE>($$$ARGS)
+    - pattern: Effect.Service<$TYPE>()($$$ARGS)
+    - pattern: Effect.catchAll($$$ARGS)
+    - pattern: Effect.catchAllCause($$$ARGS)
+    - pattern: Effect.catchSome($$$ARGS)
+    - pattern: Effect.catchSomeCause($$$ARGS)
+    - pattern: Effect.fork($$$ARGS)
+    - pattern: Effect.forkDaemon($$$ARGS)
+    - pattern: Runtime.runPromise($$$ARGS)
+    - pattern: Runtime.runSync($$$ARGS)
+    - pattern: Schema.decodeUnknown($$$ARGS)
+    - pattern: Schema.decode($$$ARGS)
+    - pattern: Schema.decodeUnknownEither($$$ARGS)
+    - pattern: Schema.decodeEither($$$ARGS)
+    - pattern: Schema.parseJson($$$ARGS)
+    - pattern: Schema.pattern($$$ARGS)
+    - pattern: Schema.UUID
+    - pattern: Schema.ULID
+
+files:
+  - "apps/**/*.ts"
+  - "apps/**/*.tsx"
+  - "packages/**/*.ts"
+  - "packages/**/*.tsx"
+
+note: |
+  This scaffold targets Effect v4. Do not reintroduce common v3 APIs.
+
+  Replacements:
+  - `Context.Tag` / `Context.GenericTag` / `Effect.Tag` / `Effect.Service` -> `Context.Service`
+  - `Effect.catchAll` -> `Effect.catch`
+  - `Effect.catchAllCause` -> `Effect.catchCause`
+  - `Effect.catchSome` -> `Effect.catchFilter`
+  - `Effect.fork` -> `Effect.forkChild`
+  - `Effect.forkDaemon` -> `Effect.forkDetach`
+  - `Runtime.runPromise(runtime)(effect)` -> `runtime.runPromise(effect)`
+  - `Schema.decodeUnknown` -> `Schema.decodeUnknownEffect`
+  - `Schema.decode` -> `Schema.decodeEffect`
+  - `Schema.decodeUnknownEither` -> `Schema.decodeUnknownExit`
+  - `Schema.parseJson(schema)` -> `Schema.fromJsonString(schema)`
+  - `Schema.pattern(regex)` -> `Schema.check(Schema.isPattern(regex))`
+  - `Schema.UUID` -> `Schema.String.check(Schema.isUUID())`
+
+ignores:
+  - "**/*.test.ts"
+  - "**/*.spec.ts"
+  - "**/node_modules/**"

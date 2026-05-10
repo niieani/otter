@@ -10,9 +10,9 @@ apps/<name>/
 ├── tsconfig.json
 ├── src/
 │   ├── worker.ts         # Entry point (message loop, runtime)
-│   ├── services.ts       # Context.Tag service definitions
+│   ├── services.ts       # Context.Service service definitions
 │   ├── layers.ts         # Layer implementations
-│   ├── errors.ts         # Data.TaggedError definitions
+│   ├── errors.ts         # Schema.TaggedErrorClass definitions
 │   ├── handlers/
 │   │   ├── process-job.ts
 │   │   └── ...
@@ -25,11 +25,11 @@ Same conventions: services, errors, layers. Handlers replace commands/routes. Th
 
 ## The Worker Boundary Pattern
 
-Build a runtime once. Each message enters Effect through `Runtime.runPromise` at the boundary:
+Build a managed runtime once. Each message enters Effect through `runtime.runPromise(effect)` at the boundary:
 
 ```typescript
 // worker.ts (boundary)
-import { Effect, ManagedRuntime, Runtime } from "effect";
+import { Effect, ManagedRuntime } from "effect";
 import { AppContext } from "./layers";
 import { routeMessage } from "./handlers";
 
@@ -43,7 +43,8 @@ for await (const message of messageSource) {
     }),
   );
 
-  await Runtime.runPromise(runtime)(effect)
+  await runtime
+    .runPromise(effect)
     .then(() => message.ack())
     .catch(() => message.nack());
 }
@@ -62,13 +63,13 @@ export const QueueLive = Layer.effect(
   QueueService,
   Effect.gen(function* () {
     // Connect to your queue system
-    return {
+    return QueueService.of({
       consume: (handler: (msg: Message) => Effect.Effect<void, ProcessError>) =>
         Effect.tryPromise({
           try: () => connectAndConsume(),
           catch: (error) => new QueueConnectionError({ cause: error }),
         }).pipe(Effect.withSpan("queue.consume")),
-    };
+    });
   }),
 );
 ```
@@ -133,7 +134,7 @@ When building a new worker app:
 - [ ] Define tagged errors in `errors.ts`
 - [ ] Queue adapter in `adapters/` wraps external queue system
 - [ ] One file per handler in `handlers/`
-- [ ] Boundary convention: `Runtime.runPromise` only in `worker.ts` (see `docs/patterns/boundaries.md`)
+- [ ] Boundary convention: `runtime.runPromise` only in `worker.ts` (see `docs/patterns/boundaries.md`)
 - [ ] `Effect.withSpan` on handlers and adapter exports
 - [ ] Graceful shutdown via `Layer.scoped` / `acquireRelease`
 - [ ] Run `bun run check` to verify ast-grep, drift, and types

@@ -47,7 +47,7 @@ note: |
   const payload: ApiResponse = await response.json();
 
   // ✅ Good - decode at the boundary, then work with the typed result
-  const payload = yield* Schema.decodeUnknown(ApiResponse)(await response.json());
+  const payload = yield* Schema.decodeUnknownEffect(ApiResponse)(await response.json());
   ```
 
   See also: `no-unsafe-typecast-at-boundary` (catches `as` casts on boundary data).

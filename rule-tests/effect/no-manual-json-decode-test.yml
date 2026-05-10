@@ -2,10 +2,10 @@ id: no-manual-json-decode
 
 valid:
   - |
-    const decoded = yield* Schema.decodeUnknown(Schema.parseJson(MySchema))(content);
+    const decoded = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(MySchema))(content);
   - |
     return yield* pipe(
-      Schema.decodeUnknown(Schema.parseJson(MySchema))(content),
+      Schema.decodeUnknownEffect(Schema.fromJsonString(MySchema))(content),
       Effect.option,
     );
   - |

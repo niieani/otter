@@ -2,7 +2,7 @@ id: no-silent-catch
 
 valid:
   - |
-    Effect.catchAll((err) =>
+    Effect.catch((err) =>
       Effect.logWarning("Falling back", err).pipe(
         Effect.map(() => []),
       ),
@@ -12,7 +12,7 @@ valid:
       Effect.succeed([]),
     )
   - |
-    Effect.catchAll((err) =>
+    Effect.catch((err) =>
       Effect.logError("error", err).pipe(
         Effect.map(() => []),
       ),
@@ -20,12 +20,12 @@ valid:
 
 invalid:
   - |
-    Effect.catchAll(() => Effect.succeed([]))
+    Effect.catch(() => Effect.succeed([]))
   - |
-    Effect.catchAll((_) => Effect.succeed(null))
+    Effect.catch((_) => Effect.succeed(null))
   - |
-    Effect.catchAll(() => Effect.succeed(undefined))
+    Effect.catch(() => Effect.succeed(undefined))
   - |
-    Effect.catchAll((_err) => Effect.succeed("fallback"))
+    Effect.catch((_err) => Effect.succeed("fallback"))
   - |
-    Effect.catchAll(() => Effect.succeed<string | undefined>(undefined))
+    Effect.catch(() => Effect.succeed<string | undefined>(undefined))

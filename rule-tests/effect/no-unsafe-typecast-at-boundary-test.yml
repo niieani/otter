@@ -4,7 +4,7 @@ valid:
   - |
     const raw: unknown = JSON.parse(body);
   - |
-    const data = yield* Schema.decodeUnknown(MySchema)(JSON.parse(body));
+    const data = yield* Schema.decodeUnknownEffect(MySchema)(JSON.parse(body));
   - |
     const payload = await response.json();
   - |

@@ -1,0 +1,55 @@
+id: no-effect-v3-apis
+
+valid:
+  - |
+    class Database extends Context.Service<Database, {
+      query(sql: string): Effect.Effect<Array<unknown>, DatabaseError>
+    }>()("app/Database") {}
+  - |
+    program.pipe(Effect.catch((error) => Effect.logError("failed", error)))
+  - |
+    program.pipe(Effect.catchCause((cause) => Effect.logError("failed", cause)))
+  - |
+    const fiber = yield* Effect.forkChild(task);
+  - |
+    const fiber = yield* Effect.forkDetach(task);
+  - |
+    await runtime.runPromise(program);
+  - |
+    const data = yield* Schema.decodeUnknownEffect(MySchema)(input);
+  - |
+    const schema = Schema.fromJsonString(MySchema);
+  - |
+    const id = Schema.String.check(Schema.isUUID());
+
+invalid:
+  - |
+    class Database extends Context.Tag("Database")<Database, Service>() {}
+  - |
+    const Database = Context.GenericTag<Service>("Database");
+  - |
+    class Logger extends Effect.Service<Logger>()("Logger", { effect: makeLogger }) {}
+  - |
+    program.pipe(Effect.catchAll((error) => Effect.logError("failed", error)))
+  - |
+    program.pipe(Effect.catchAllCause((cause) => Effect.logError("failed", cause)))
+  - |
+    program.pipe(Effect.catchSome(handler))
+  - |
+    const fiber = yield* Effect.fork(task);
+  - |
+    const fiber = yield* Effect.forkDaemon(task);
+  - |
+    await Runtime.runPromise(runtime)(program);
+  - |
+    const data = yield* Schema.decodeUnknown(MySchema)(input);
+  - |
+    const data = yield* Schema.decode(MySchema)(input);
+  - |
+    const result = Schema.decodeUnknownEither(MySchema)(input);
+  - |
+    const schema = Schema.parseJson(MySchema);
+  - |
+    const name = Schema.String.pipe(Schema.pattern(/^[a-z]+$/));
+  - |
+    const id = Schema.UUID;

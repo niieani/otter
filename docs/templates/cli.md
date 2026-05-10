@@ -1,8 +1,8 @@
 # How to Build an Effect CLI
 
-This is a reference template for CLI tools. For conventions that apply to all app types, see the patterns docs (`docs/patterns/`). This template shows CLI-specific wiring.
-
-A template for building CLI tools with Effect + Bun + yargs. This describes the project structure, service patterns, and entry point setup that an agent should follow when creating a new CLI app.
+This is a reference template for CLI tools. For conventions that apply to all app
+types, see the patterns docs (`docs/patterns/`). This template uses Effect v4,
+Bun, and the native `effect/unstable/cli` module.
 
 ## Project Structure
 
@@ -13,12 +13,12 @@ apps/<name>/
 ├── package.json
 ├── tsconfig.json
 ├── src/
-│   ├── index.ts          # Entry point (yargs setup, Effect.runMain)
-│   ├── services.ts       # Context.Tag service definitions
-│   ├── layers.ts         # Layer implementations
-│   ├── errors.ts         # Data.TaggedError definitions
+│   ├── index.ts          # Entry point (Command.run, BunRuntime.runMain)
+│   ├── services.ts       # Context.Service definitions
+│   ├── layers.ts         # Layer composition
+│   ├── errors.ts         # Schema.TaggedErrorClass definitions
 │   └── commands/
-│       ├── hello.ts      # One file per command (or command group)
+│       ├── hello.ts      # One file per command or command group
 │       └── ...
 ```
 
@@ -42,18 +42,14 @@ apps/<name>/
     "test": "bun test"
   },
   "dependencies": {
-    "effect": "^3.14.0",
-    "@effect/platform": "^0.78.0",
-    "@effect/platform-bun": "^0.56.0",
-    "yargs": "^17.7.2"
-  },
-  "devDependencies": {
-    "@types/yargs": "^17.0.33"
+    "effect": "^4.0.0-beta.65",
+    "@effect/platform-bun": "^4.0.0-beta.65"
   }
 }
 ```
 
-**Note:** Check for the latest Effect versions before creating the package.json. The versions above are examples.
+**Note:** Check the local `references/effect-smol/packages/*/package.json` versions
+before creating package files. Effect v4 ecosystem packages share one version.
 
 ## tsconfig.json (app-level)
 
@@ -77,181 +73,123 @@ Extends the root config, adds build settings:
 
 ## Services (services.ts)
 
-Define services as Context.Tag — one per external dependency or configuration source:
+Define services as `Context.Service` -- one per external dependency or configuration
+source:
 
 ```typescript
-import { Context } from "effect";
+import { Context, Effect, Layer, Schema } from "effect";
 
-/**
- * Application configuration resolved at startup.
- */
-export class AppConfig extends Context.Tag("AppConfig")<
+export class AppConfig extends Context.Service<
   AppConfig,
   {
     readonly configDir: string;
     readonly projectRoot: string;
     readonly verbose: boolean;
   }
->() {}
-```
-
-Keep services minimal — just the shape of the dependency. Implementation goes in layers.
-
-## Errors (errors.ts)
-
-All errors extend Data.TaggedError with descriptive messages:
-
-```typescript
-import { Data } from "effect";
-
-export class ConfigNotFoundError extends Data.TaggedError("ConfigNotFoundError")<{
-  readonly path: string;
-  readonly suggestion?: string;
-}> {
-  get message(): string {
-    const base = `Config not found at ${this.path}`;
-    return this.suggestion ? `${base}\n  Suggestion: ${this.suggestion}` : base;
-  }
+>()("app/AppConfig") {
+  static readonly layer = Layer.effect(
+    AppConfig,
+    Effect.gen(function* () {
+      return AppConfig.of({
+        configDir: ".",
+        projectRoot: process.cwd(),
+        verbose: false,
+      });
+    }),
+  );
 }
 
-export class CommandError extends Data.TaggedError("CommandError")<{
-  readonly command: string;
-  readonly reason: string;
-}> {
-  get message(): string {
-    return `Command '${this.command}' failed: ${this.reason}`;
-  }
-}
+export class CommandError extends Schema.TaggedErrorClass<CommandError>()("CommandError", {
+  command: Schema.String,
+  reason: Schema.String,
+}) {}
 ```
+
+Keep services minimal. The shape and primary layer can live together when the service
+is small; split implementation into adapters when it wraps external I/O.
 
 ## Layers (layers.ts)
 
-Create live implementations of services:
+Compose live implementations once:
 
 ```typescript
-import { BunContext, BunFileSystem } from "@effect/platform-bun";
-import { Effect, Layer } from "effect";
+import { BunServices } from "@effect/platform-bun";
+import { Layer } from "effect";
 import { AppConfig } from "./services";
 
-export const AppConfigLive = Layer.effect(
-  AppConfig,
-  Effect.gen(function* () {
-    const fs = yield* BunFileSystem.BunFileSystem;
-    // Resolve configuration
-    return {
-      configDir: "/path/to/config",
-      projectRoot: process.cwd(),
-      verbose: false,
-    };
-  }),
-);
-
-// Compose all layers for the app
-export const AppContext = Layer.mergeAll(AppConfigLive, BunContext.layer);
+export const AppContext = Layer.mergeAll(AppConfig.layer, BunServices.layer);
 ```
 
 ## Commands (commands/\*.ts)
 
-Each command returns an Effect. Commands capture yargs args but don't execute — the entry point runs them:
+Commands return Effects. Prefer `Effect.fn("name")` for named spans and better
+traces:
 
 ```typescript
-import { Effect } from "effect";
-import { AppConfig } from "../services";
-import type { CommandError } from "../errors";
+import { Console, Effect } from "effect";
+import { AppConfig, CommandError } from "../services";
 
-export const hello = (args: { name: string }): Effect.Effect<void, CommandError, AppConfig> =>
-  Effect.gen(function* () {
-    const config = yield* AppConfig;
-    yield* Effect.log(`Hello, ${args.name}!`, { configDir: config.configDir });
-  }).pipe(Effect.withSpan("hello", { attributes: { name: args.name } }));
+export const hello = Effect.fn("hello")(function* (
+  name: string,
+): Effect.fn.Return<void, CommandError, AppConfig> {
+  const config = yield* AppConfig;
+  yield* Console.log(`Hello, ${name} from ${config.configDir}`);
+});
 ```
 
 ## Entry Point (index.ts)
 
-Wire yargs to Effect using the async-resume pattern:
+Use Effect's native CLI builder instead of yargs:
 
 ```typescript
 #!/usr/bin/env bun
 import { BunRuntime } from "@effect/platform-bun";
-import { Effect, pipe } from "effect";
-import yargs from "yargs";
-import { hideBin } from "yargs/helpers";
+import { Effect } from "effect";
+import { Argument, Command, Flag } from "effect/unstable/cli";
 import { hello } from "./commands/hello";
 import { AppContext } from "./layers";
 
-type CommandEffect = Effect.Effect<void, unknown, never>;
-
-const parseArgs = (): Effect.Effect<CommandEffect> =>
-  Effect.async<CommandEffect>((resume) => {
-    let selectedCommand: CommandEffect | null = null;
-
-    const cli = yargs(hideBin(process.argv))
-      .scriptName("<name>")
-      .command(
-        "hello <name>",
-        "Say hello",
-        (yargs) =>
-          yargs.positional("name", {
-            type: "string",
-            demandOption: true,
-          }),
-        (argv) => {
-          // Capture the Effect with layers provided — don't execute yet
-          selectedCommand = hello({ name: argv.name! }).pipe(Effect.provide(AppContext));
-        },
-      )
-      .demandCommand(1, "Please specify a command")
-      .strict()
-      .help();
-
-    const parseResult = cli.parse();
-
-    const finalize = (): void => {
-      if (selectedCommand !== null) {
-        resume(Effect.succeed(selectedCommand));
-      }
-    };
-
-    if (parseResult instanceof Promise) {
-      parseResult.then(finalize).catch((error) => {
-        resume(Effect.fail(error instanceof Error ? error : new Error(String(error))));
-      });
-    } else {
-      finalize();
-    }
-  });
-
-// Main program
-const main = pipe(
-  parseArgs(),
-  Effect.flatMap((command) => command),
-  Effect.catchAllCause((cause) =>
-    Effect.gen(function* () {
-      yield* Effect.logError("Command failed", cause);
-      process.exit(1);
-    }),
-  ),
+const root = Command.make("<name>").pipe(
+  Command.withSharedFlags({
+    verbose: Flag.boolean("verbose").pipe(
+      Flag.withAlias("v"),
+      Flag.withDescription("Print diagnostic output"),
+    ),
+  }),
 );
 
-BunRuntime.runMain(main);
+const helloCommand = Command.make(
+  "hello",
+  {
+    name: Argument.string("name"),
+  },
+  Effect.fn("helloCommand")(function* ({ name }) {
+    yield* hello(name);
+  }),
+).pipe(Command.withDescription("Say hello"));
+
+root.pipe(
+  Command.withSubcommands([helloCommand]),
+  Command.run({ version: "0.0.1" }),
+  Effect.provide(AppContext),
+  Effect.catchCause((cause) =>
+    Effect.gen(function* () {
+      yield* Effect.logError("Command failed", cause);
+      process.exitCode = 1;
+    }),
+  ),
+  BunRuntime.runMain,
+);
 ```
 
 ## Adding Observability
 
 To add tracing to your CLI, see `docs/patterns/observability.md`. The key steps:
 
-1. Add `@effect/opentelemetry` and `@opentelemetry/sdk-trace-base` dependencies
-2. Create an env-var-gated `TracingLive` layer:
-   ```typescript
-   const TracingLive = process.env["EFFECT_TRACE"]
-     ? NodeSdk.layer(() => ({
-         resource: { serviceName: "my-cli" },
-         spanProcessor: new SimpleSpanProcessor(new ConsoleSpanExporter()),
-       }))
-     : Layer.empty;
-   ```
-3. Add `TracingLive` to your `AppContext` layer composition
-4. Use `Effect.withSpan` in your commands
+1. Add `@effect/opentelemetry` and matching OpenTelemetry dependencies
+2. Create an env-var-gated `TracingLive` layer
+3. Add `TracingLive` to `AppContext`
+4. Use `Effect.fn("name")` or `Effect.withSpan` in commands
 5. Run with `EFFECT_TRACE=1 bun run dev` to see traces
 
 ## Checklist
@@ -259,12 +197,11 @@ To add tracing to your CLI, see `docs/patterns/observability.md`. The key steps:
 When building a new CLI app:
 
 - [ ] Create `apps/<name>/` with the structure above
-- [ ] Define services in `services.ts` for each external dependency
-- [ ] Define tagged errors in `errors.ts`
-- [ ] Create layers in `layers.ts` with proper dependency composition
+- [ ] Define services with `Context.Service`
+- [ ] Define tagged errors with `Schema.TaggedErrorClass`
+- [ ] Compose app layers once in `layers.ts`
 - [ ] One file per command in `commands/`
-- [ ] Wire yargs in `index.ts` using the async-resume pattern
-- [ ] Boundary convention: I/O in `*.adapter.ts` files, pure Effect everywhere else (see `docs/patterns/boundaries.md`)
-- [ ] Add `Effect.withSpan` to commands and adapter exports for observability
-- [ ] Run `ast-grep scan` to catch Effect anti-patterns
-- [ ] Run `bun run typecheck` from root
+- [ ] Wire commands with `effect/unstable/cli`
+- [ ] Boundary convention: I/O in `*.adapter.ts` files, pure Effect everywhere else
+- [ ] Add `Effect.fn("name")` or `Effect.withSpan` for observability
+- [ ] Run `bun run check` from root

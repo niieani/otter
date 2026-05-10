@@ -1,57 +1,57 @@
 id: no-silent-catch
 snapshots:
   ? |
-    Effect.catchAll(() => Effect.succeed([]))
+    Effect.catch(() => Effect.succeed([]))
   : labels:
-    - source: Effect.catchAll(() => Effect.succeed([]))
-      style: primary
-      start: 0
-      end: 41
-    - source: Effect.succeed([])
-      style: secondary
-      start: 22
-      end: 40
+      - source: Effect.catch(() => Effect.succeed([]))
+        style: primary
+        start: 0
+        end: 38
+      - source: Effect.succeed([])
+        style: secondary
+        start: 19
+        end: 37
   ? |
-    Effect.catchAll(() => Effect.succeed(undefined))
+    Effect.catch(() => Effect.succeed(undefined))
   : labels:
-    - source: Effect.catchAll(() => Effect.succeed(undefined))
-      style: primary
-      start: 0
-      end: 48
-    - source: Effect.succeed(undefined)
-      style: secondary
-      start: 22
-      end: 47
+      - source: Effect.catch(() => Effect.succeed(undefined))
+        style: primary
+        start: 0
+        end: 45
+      - source: Effect.succeed(undefined)
+        style: secondary
+        start: 19
+        end: 44
   ? |
-    Effect.catchAll(() => Effect.succeed<string | undefined>(undefined))
+    Effect.catch(() => Effect.succeed<string | undefined>(undefined))
   : labels:
-    - source: Effect.catchAll(() => Effect.succeed<string | undefined>(undefined))
-      style: primary
-      start: 0
-      end: 68
-    - source: Effect.succeed<string | undefined>(undefined)
-      style: secondary
-      start: 22
-      end: 67
+      - source: Effect.catch(() => Effect.succeed<string | undefined>(undefined))
+        style: primary
+        start: 0
+        end: 65
+      - source: Effect.succeed<string | undefined>(undefined)
+        style: secondary
+        start: 19
+        end: 64
   ? |
-    Effect.catchAll((_) => Effect.succeed(null))
+    Effect.catch((_) => Effect.succeed(null))
   : labels:
-    - source: Effect.catchAll((_) => Effect.succeed(null))
-      style: primary
-      start: 0
-      end: 44
-    - source: Effect.succeed(null)
-      style: secondary
-      start: 23
-      end: 43
+      - source: Effect.catch((_) => Effect.succeed(null))
+        style: primary
+        start: 0
+        end: 41
+      - source: Effect.succeed(null)
+        style: secondary
+        start: 20
+        end: 40
   ? |
-    Effect.catchAll((_err) => Effect.succeed("fallback"))
+    Effect.catch((_err) => Effect.succeed("fallback"))
   : labels:
-    - source: Effect.catchAll((_err) => Effect.succeed("fallback"))
-      style: primary
-      start: 0
-      end: 53
-    - source: Effect.succeed("fallback")
-      style: secondary
-      start: 26
-      end: 52
+      - source: Effect.catch((_err) => Effect.succeed("fallback"))
+        style: primary
+        start: 0
+        end: 50
+      - source: Effect.succeed("fallback")
+        style: secondary
+        start: 23
+        end: 49

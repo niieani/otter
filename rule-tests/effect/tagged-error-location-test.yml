@@ -12,25 +12,23 @@ valid:
 
 invalid:
   - |
-    class HelloError extends Data.TaggedError("HelloError")<{
-      readonly reason: string;
-    }> {}
+    class HelloError extends Schema.TaggedErrorClass<HelloError>()("HelloError", {
+      reason: Schema.String,
+    }) {}
   - |
-    export class FetchError extends Data.TaggedError("FetchError")<{
-      readonly url: string;
-      readonly status: number;
-    }> {
+    export class FetchError extends Schema.TaggedErrorClass<FetchError>()("FetchError", {
+      url: Schema.String,
+      status: Schema.Number,
+    }) {
       get message() {
         return `Fetch failed: ${this.url}`;
       }
     }
   - |
-    class ApiError extends Schema.ErrorClass("ApiError")({
-      _tag: Schema.tag("ApiError"),
+    class ApiError extends Schema.TaggedErrorClass<ApiError>()("ApiError", {
       message: Schema.String,
     }) {}
   - |
-    export class RpcError extends Schema.ErrorClass("RpcError")({
-      _tag: Schema.tag("RpcError"),
+    export class RpcError extends Schema.TaggedErrorClass<RpcError>()("RpcError", {
       code: Schema.Number,
     }) {}

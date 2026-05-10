@@ -70,17 +70,18 @@ Custom lint rules in `rules/`, run via `bun run lint:ast`.
 | `no-bare-new-error`       | `new Error()`, `new TypeError()`, etc. — use TaggedError or let unknowns propagate  |
 | `no-console-log`          | `console.*` — use `Effect.log`                                                      |
 | `no-direct-fs`            | Direct `node:fs` imports — use Effect's FileSystem service                          |
-| `no-fetch-in-effect`      | `Effect.tryPromise` wrapping `fetch()` — use `@effect/platform`'s `HttpClient`      |
+| `no-effect-v3-apis`       | Common Effect v3 APIs — use v4 replacements                                         |
+| `no-fetch-in-effect`      | `Effect.tryPromise` wrapping `fetch()` — use Effect's `HttpClient`                  |
 | `no-interface-in-models`  | `export interface` in models — use `Schema.Struct`                                  |
 | `no-interpolated-logging` | Template literals or concatenation in log calls — use structured annotations        |
-| `no-manual-json-decode`   | `Effect.try({ try: () => JSON.parse(...) })` — use `Schema.parseJson(Inner)`        |
+| `no-manual-json-decode`   | `Effect.try({ try: () => JSON.parse(...) })` — use `Schema.fromJsonString(Inner)`   |
 | `no-manual-tag-check`     | Manual `._tag` checks — use `Effect.catchTag` or `Match.tag`                        |
 | `no-runpromise-in-effect` | `Effect.runPromise`/`runSync` inside Effect code — use `yield*` or boundary pattern |
-| `no-silent-catch`         | `Effect.catchAll` without logging — always log before recovering                    |
+| `no-silent-catch`         | `Effect.catch` without logging — always log before recovering                       |
 | `no-throw-in-effect`      | `throw` in Effect generators — use `Effect.fail`                                    |
 | `no-try-catch`            | `try/catch` in Effect code — use `Effect.try` or `Effect.catchTag`                  |
-| `tagged-error-location`   | `Data.TaggedError` outside `errors.ts` — keep error definitions co-located          |
-| `use-tagged-error`        | `class X extends Error` — use `Data.TaggedError`                                    |
+| `tagged-error-location`   | Tagged error classes outside `errors.ts` — keep definitions co-located              |
+| `use-tagged-error`        | `class X extends Error` — use `Schema.TaggedErrorClass`                             |
 
 ## fp extensions
 

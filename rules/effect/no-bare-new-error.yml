@@ -23,7 +23,7 @@ files:
 
 note: |
   Don't construct built-in Error types in Effect code. Errors are either:
-  - **Tagged** (known/handled): Data.TaggedError with typed fields, catchable via Effect.catchTag
+  - **Tagged** (known/handled): Schema.TaggedErrorClass with typed fields, catchable via Effect.catchTag
   - **Unknown** (unexpected): let them propagate as UnknownException
 
   Example:

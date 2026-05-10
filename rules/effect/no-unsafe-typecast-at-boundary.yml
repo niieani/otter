@@ -3,7 +3,7 @@
 id: no-unsafe-typecast-at-boundary
 language: tsx
 severity: error
-message: "Unsafe type assertion on external data - use Schema.decodeUnknown instead"
+message: "Unsafe type assertion on external data - use Schema.decodeUnknownEffect instead"
 
 rule:
   any:
@@ -27,7 +27,7 @@ note: |
   The data may not match the asserted type, causing silent corruption or
   crashes far from the original parse site.
 
-  Use `Schema.decodeUnknown` to validate at the boundary:
+  Use `Schema.decodeUnknownEffect` to validate at the boundary:
 
   ```typescript
   // ❌ Bad — no runtime validation
@@ -38,8 +38,8 @@ note: |
   // ✅ Good — schema validates at runtime
   import { Schema } from "effect";
 
-  const data = yield* Schema.decodeUnknown(MySchema)(JSON.parse(body));
-  const payload = yield* Schema.decodeUnknown(ApiResponse)(await response.json());
+  const data = yield* Schema.decodeUnknownEffect(MySchema)(JSON.parse(body));
+  const payload = yield* Schema.decodeUnknownEffect(ApiResponse)(await response.json());
 
   // ✅ Good — no cast, just unknown
   const raw: unknown = JSON.parse(body);

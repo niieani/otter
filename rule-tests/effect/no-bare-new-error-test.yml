@@ -2,9 +2,10 @@ id: no-bare-new-error
 
 valid:
   - |
-    class ExtensionHostServiceError extends Data.TaggedError("ExtensionHostServiceError")<{
-      readonly reason: string;
-    }> {}
+    class ExtensionHostServiceError extends Schema.TaggedErrorClass<ExtensionHostServiceError>()(
+      "ExtensionHostServiceError",
+      { reason: Schema.String },
+    ) {}
 
     Effect.fail(new ExtensionHostServiceError({ reason: "Extension process stopped" }));
   - |

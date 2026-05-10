@@ -2,17 +2,17 @@ id: no-json-parse-without-schema
 
 valid:
   - |
-    const data = yield* Schema.decodeUnknown(MySchema)(JSON.parse(body));
+    const data = yield* Schema.decodeUnknownEffect(MySchema)(JSON.parse(body));
   - |
     const data = Schema.decodeUnknownSync(MySchema)(JSON.parse(body));
   - |
-    const data = yield* Schema.decode(MySchema)(JSON.parse(body));
+    const data = yield* Schema.decodeEffect(MySchema)(JSON.parse(body));
   - |
     const data = Schema.decodeSync(MySchema)(JSON.parse(body));
   - |
-    const result = Schema.decodeUnknownEither(MySchema)(JSON.parse(body));
+    const result = Schema.decodeUnknownExit(MySchema)(JSON.parse(body));
   - |
-    const result = Schema.decodeUnknownOption(MySchema)(JSON.parse(body));
+    const result = Schema.decodeExit(MySchema)(JSON.parse(body));
 
 invalid:
   - |
@@ -23,4 +23,4 @@ invalid:
     return JSON.parse(await response.text());
   - |
     const raw = JSON.parse(body);
-    const data = yield* Schema.decodeUnknown(MySchema)(raw);
+    const data = yield* Schema.decodeUnknownEffect(MySchema)(raw);

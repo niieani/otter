@@ -10,9 +10,9 @@ apps/<name>/
 ├── tsconfig.json
 ├── src/
 │   ├── server.ts         # Entry point (build runtime, start server)
-│   ├── services.ts       # Context.Tag service definitions
+│   ├── services.ts       # Context.Service service definitions
 │   ├── layers.ts         # Layer implementations
-│   ├── errors.ts         # Data.TaggedError definitions
+│   ├── errors.ts         # Schema.TaggedErrorClass definitions
 │   ├── routes/
 │   │   ├── health.ts     # One file per route group
 │   │   └── ...
@@ -25,11 +25,11 @@ Same conventions as other app types: services in `services.ts`, errors in `error
 
 ## The API Boundary Pattern
 
-Build a `ManagedRuntime` once at startup with all layers provided. Each incoming request enters Effect through `Runtime.runPromise` at the boundary:
+Build a `ManagedRuntime` once at startup with all layers provided. Each incoming request enters Effect through `runtime.runPromise(effect)` at the boundary:
 
 ```typescript
 // server.ts (boundary)
-import { ManagedRuntime } from "effect";
+import { Effect, ManagedRuntime } from "effect";
 import { AppContext } from "./layers";
 
 const runtime = ManagedRuntime.make(AppContext);
@@ -42,7 +42,7 @@ async function handleRequest(req: Request): Promise<Response> {
     }),
   );
 
-  const result = await Runtime.runPromise(runtime)(effect);
+  const result = await runtime.runPromise(effect);
   return new Response(JSON.stringify(result), { status: 200 });
 }
 ```
@@ -79,13 +79,13 @@ export const DatabaseLive = Layer.effect(
   DatabaseService,
   Effect.gen(function* () {
     // Connect to database, return service implementation
-    return {
+    return DatabaseService.of({
       findUser: (id: string) =>
         Effect.tryPromise({
           try: () => queryDatabase("SELECT * FROM users WHERE id = ?", [id]),
           catch: (error) => new DatabaseError({ operation: "findUser", cause: error }),
         }).pipe(Effect.withSpan("db.findUser", { attributes: { userId: id } })),
-    };
+    });
   }),
 );
 ```
@@ -121,7 +121,7 @@ const toResponse = (effect: Effect.Effect<unknown, AppError>) =>
       UserNotFoundError: () => Effect.succeed(new Response("Not found", { status: 404 })),
       ValidationError: (e) => Effect.succeed(new Response(e.message, { status: 400 })),
     }),
-    Effect.catchAll((e) =>
+    Effect.catch((e) =>
       Effect.logError("Unhandled error", e).pipe(
         Effect.map(() => new Response("Internal error", { status: 500 })),
       ),
@@ -139,7 +139,7 @@ When building a new API app:
 - [ ] Create layers in `layers.ts` with `ManagedRuntime` at the entry point
 - [ ] One file per route group in `routes/`
 - [ ] Adapter files (`*.adapter.ts`) for all external I/O
-- [ ] Boundary convention: `Runtime.runPromise` only in `server.ts` (see `docs/patterns/boundaries.md`)
+- [ ] Boundary convention: `runtime.runPromise` only in `server.ts` (see `docs/patterns/boundaries.md`)
 - [ ] `Effect.withSpan` on route handlers and adapter exports
 - [ ] Map tagged errors to HTTP status codes at the boundary
 - [ ] Run `bun run check` to verify ast-grep, drift, and types

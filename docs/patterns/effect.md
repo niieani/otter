@@ -4,15 +4,20 @@ This documents how we use [Effect](https://effect.website/) in this repo. It cov
 
 ## Tagged Errors
 
-All custom errors extend `Data.TaggedError` with strongly-typed properties:
+All custom application errors extend `Schema.TaggedErrorClass` with strongly-typed
+properties. This is the v4 default because errors carry their schema metadata and still
+work with `Effect.catchTag` / `Effect.catchTags`.
 
 ```typescript
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export class IssueNotFoundError extends Data.TaggedError("IssueNotFoundError")<{
-  readonly issueId: string;
-  readonly suggestion?: string;
-}> {
+export class IssueNotFoundError extends Schema.TaggedErrorClass<IssueNotFoundError>()(
+  "IssueNotFoundError",
+  {
+    issueId: Schema.String,
+    suggestion: Schema.optionalKey(Schema.String),
+  },
+) {
   get message(): string {
     const base = `Issue ${this.issueId} not found`;
     const suggestion = this.suggestion ?? "Run 'fp issue list' to see available issues";
@@ -20,11 +25,11 @@ export class IssueNotFoundError extends Data.TaggedError("IssueNotFoundError")<{
   }
 }
 
-export class ValidationError extends Data.TaggedError("ValidationError")<{
-  readonly field: string;
-  readonly reason: string;
-  readonly suggestion?: string;
-}> {
+export class ValidationError extends Schema.TaggedErrorClass<ValidationError>()("ValidationError", {
+  field: Schema.String,
+  reason: Schema.String,
+  suggestion: Schema.optionalKey(Schema.String),
+}) {
   get message(): string {
     const base = `Invalid ${this.field}: ${this.reason}`;
     if (this.suggestion) {
@@ -35,14 +40,19 @@ export class ValidationError extends Data.TaggedError("ValidationError")<{
 }
 ```
 
-## Schema.ErrorClass (Serializable Errors)
+`Data.TaggedError` still exists in v4 and may appear in upstream internals, but new
+scaffold code should prefer `Schema.TaggedErrorClass`.
 
-For errors that cross service boundaries (API responses, queue messages, RPC), use `Schema.ErrorClass` instead of `Data.TaggedError`. It adds schema validation and JSON serialization:
+## Schema.ErrorClass (Protocol Errors)
+
+For errors that cross generated protocol boundaries (HTTP API, RPC), `Schema.ErrorClass`
+is also valid. It uses the same schema-first shape but is generally reserved for
+framework APIs that ask for it:
 
 ```typescript
 import { Schema } from "effect";
 
-export class ApiNotFoundError extends Schema.ErrorClass("ApiNotFoundError")({
+export class ApiNotFoundError extends Schema.ErrorClass<ApiNotFoundError>("ApiNotFoundError")({
   _tag: Schema.tag("ApiNotFoundError"),
   resource: Schema.String,
   id: Schema.String,
@@ -53,39 +63,44 @@ export class ApiNotFoundError extends Schema.ErrorClass("ApiNotFoundError")({
 }
 ```
 
-Use `Data.TaggedError` for in-process errors. Use `Schema.ErrorClass` when errors need to serialize across boundaries. Both must live in `errors.ts`.
+Both `Schema.TaggedErrorClass` and `Schema.ErrorClass` must live in `errors.ts`.
 
 ## Service Architecture
 
-Define services with `Context.Tag`:
+Define services with `Context.Service`:
 
 ```typescript
 // services.ts
-import { Context } from "effect";
+import { Context, Effect, Layer } from "effect";
 
-export class ConfigService extends Context.Tag("ConfigService")<
+export class ConfigService extends Context.Service<
   ConfigService,
-  { readonly configDir: string; readonly projectRoot: string }
->() {}
+  {
+    readonly configDir: string;
+    readonly projectRoot: string;
+  }
+>()("app/ConfigService") {
+  static readonly layer = Layer.effect(
+    ConfigService,
+    Effect.gen(function* () {
+      const resolution = yield* resolveConfigDir();
+      return ConfigService.of({
+        configDir: resolution.configDir,
+        projectRoot: resolution.projectRoot,
+      });
+    }),
+  );
+}
 ```
 
-Create layers with `Layer.effect`:
+Layer names use `layer` for the primary implementation. Use descriptive suffixes for
+variants (`layerTest`, `layerMemory`, `layerConfig`).
 
 ```typescript
 // layers.ts
-import { Layer, Effect } from "effect";
+import { Layer } from "effect";
 
-export const ConfigLive = Layer.effect(
-  ConfigService,
-  Effect.gen(function* () {
-    const resolution = yield* resolveConfigDir();
-
-    return {
-      configDir: resolution.configDir,
-      projectRoot: resolution.projectRoot,
-    };
-  }),
-);
+export const AppContext = Layer.mergeAll(ConfigService.layer);
 ```
 
 Inject services with `yield*`:
@@ -129,7 +144,9 @@ const publishMessage = (client: PubSubClient, payload: Payload) =>
 
 These wrappers belong in boundary files (`*.adapter.ts` or `adapters/`). See `docs/patterns/boundaries.md` for the full convention on what goes where.
 
-For HTTP specifically, prefer `@effect/platform`'s `HttpClient` over `Effect.tryPromise(() => fetch(...))` — see code smell #12 below. The `no-fetch-in-effect` rule enforces this.
+For HTTP specifically, prefer Effect v4's `effect/unstable/http` `HttpClient` over
+`Effect.tryPromise(() => fetch(...))` -- see code smell #12 below. The
+`no-fetch-in-effect` rule enforces this.
 
 ### Effect.all with Concurrency
 
@@ -145,13 +162,13 @@ const [comments, details] =
   yield * Effect.all([getComments(itemId), getDetails(itemId)], { concurrency: "unbounded" });
 ```
 
-### Effect.forkDaemon for Background Tasks
+### Effect.forkDetach for Background Tasks
 
 Fire-and-forget operations that should not block the current handler:
 
 ```typescript
 // Prefetch in background -- don't block the current handler
-yield * prefetchData(nextItemId).pipe(Effect.forkDaemon);
+yield * prefetchData(nextItemId).pipe(Effect.forkDetach);
 ```
 
 ### Fallback with Logging
@@ -159,11 +176,11 @@ yield * prefetchData(nextItemId).pipe(Effect.forkDaemon);
 Recover from errors while still logging them:
 
 ```typescript
-// Good: tapError + catchAll for safe fallback
+// Good: tapError + catch for safe fallback
 const safeLoad = (effect: Effect.Effect<Data, Error>) =>
   effect.pipe(
     Effect.tapError((err) => Effect.logWarning("Falling back", err)),
-    Effect.catchAll(() => Effect.succeed(fallbackValue)),
+    Effect.catch(() => Effect.succeed(fallbackValue)),
   );
 ```
 
@@ -265,7 +282,7 @@ if (Either.isLeft(either)) {
 }
 ```
 
-**Key insight**: `Data.TaggedError("Foo")` extends `Error` and sets `.name` to the tag.
+**Key insight**: `Schema.TaggedErrorClass` extends `Error` and sets `.name` to the tag.
 So at application boundaries (where you leave the Effect world), you can use
 `error instanceof Error` and `error.name` instead of `_tag`. But inside Effect
 pipelines, always prefer `catchTag`/`catchTags`/`Match`.
@@ -382,9 +399,9 @@ function parseItem(data: unknown): Item {
 import { Schema } from "effect";
 
 const Item = Schema.Struct({
-  id: Schema.UUID,
+  id: Schema.String.check(Schema.isUUID()),
   title: Schema.String,
-  status: Schema.Literal("todo", "in-progress", "done"),
+  status: Schema.Literals(["todo", "in-progress", "done"]),
   createdAt: Schema.Date,
 });
 
@@ -392,7 +409,7 @@ const Item = Schema.Struct({
 type Item = Schema.Schema.Type<typeof Item>;
 
 // Validation returns Effect with proper error handling
-const parseItem = Schema.decodeUnknown(Item);
+const parseItem = Schema.decodeUnknownEffect(Item);
 // Returns: Effect<Item, ParseError>
 ```
 
@@ -437,10 +454,10 @@ Effect.gen(function* () {
   return result;
 });
 
-// Good: Runtime.runPromise at application boundaries (HTTP handlers, IPC)
+// Good: ManagedRuntime at application boundaries (HTTP handlers, IPC)
 app.get("/api/data", async (c) => {
   const runtime = c.get("runtime");
-  return Runtime.runPromise(runtime)(getDataEffect);
+  return runtime.runPromise(getDataEffect);
 });
 ```
 
@@ -480,22 +497,22 @@ returns a proper `Either.Either<A, E>` (from `Effect.either`), not a plain
 object union `{_tag: "Right", right: A} | {_tag: "Left", left: E}`. The
 plain object won't work with `Either.isLeft`/`Either.isRight`.
 
-### 11. Silently Swallowing Errors with catchAll
+### 11. Silently Swallowing Errors with catch
 
 ```typescript
 // Bad: Error silently disappears -- impossible to debug
-Effect.catchAll(() => Effect.succeed([]));
+Effect.catch(() => Effect.succeed([]));
 
 // Good: Log before recovering
-Effect.catchAll((err) =>
+Effect.catch((err) =>
   Effect.logWarning("Falling back due to error", err).pipe(Effect.map(() => [])),
 );
 
-// Good: Use tapError before catchAll
+// Good: Use tapError before catch
 pipe(
   someEffect,
   Effect.tapError((err) => Effect.logWarning("Recovering from", err)),
-  Effect.catchAll(() => Effect.succeed([])),
+  Effect.catch(() => Effect.succeed([])),
 );
 
 // Good: Catch specific errors instead of all
@@ -504,7 +521,7 @@ Effect.catchTag("NetworkError", (err) =>
 );
 ```
 
-Silent `catchAll` hides failures and makes debugging impossible. Always log the error before recovering, or catch specific error tags instead.
+Silent `catch` hides failures and makes debugging impossible. Always log the error before recovering, or catch specific error tags instead.
 
 ### 12. HttpClient over raw fetch
 
@@ -516,7 +533,7 @@ const response = yield* Effect.tryPromise({
 });
 if (!response.ok) { /* ... */ }
 const json = yield* Effect.tryPromise({ try: () => response.json(), catch: ... });
-const decoded = yield* Schema.decodeUnknown(Manifest)(json);
+const decoded = yield* Schema.decodeUnknownEffect(Manifest)(json);
 
 // Good: HttpClient + filterStatusOk + schemaBodyJson + Effect.timeoutFail
 const httpClient = yield* HttpClient.HttpClient;
@@ -536,7 +553,7 @@ Benefits:
 
 - Typed error channel: `RequestError | ResponseError | ParseError`. No stringly-typed `String(error)` round-trip.
 - `filterStatusOk` turns 4xx/5xx into `ResponseError` without an explicit `if (!response.ok)` branch.
-- `schemaBodyJson` replaces `response.json() → Schema.decodeUnknown(...)` with a single step that fails cleanly into `ParseError`.
+- `schemaBodyJson` replaces `response.json() -> Schema.decodeUnknownEffect(...)` with a single step that fails cleanly into `ParseError`.
 - Effect fibers cancel via `Effect.timeoutFail`; no manual `AbortController` + `clearTimeout` choreography.
 
 The `no-fetch-in-effect` rule catches `Effect.tryPromise` wrappers around `fetch(...)`.
@@ -589,29 +606,30 @@ Benefits:
 - Payload: failure variants carry context (`reason: string`) so debug logs don't lose information.
 - Refactor safety: rename a variant and TypeScript finds every site. String literals silently rot.
 
-### 14. JSON decoding via `Schema.parseJson`
+### 14. JSON decoding via `Schema.fromJsonString`
 
 ```typescript
 // Bad: parse then decode as two separate steps, each with its own error handling
-const parseResult = yield* Effect.either(
-  Effect.try({
-    try: () => JSON.parse(content) as unknown,
-    catch: (error) => error,
-  }),
-);
+const parseResult =
+  yield *
+  Effect.either(
+    Effect.try({
+      try: () => JSON.parse(content) as unknown,
+      catch: (error) => error,
+    }),
+  );
 if (Either.isLeft(parseResult)) return Option.none();
-const decoded = yield* Effect.either(Schema.decodeUnknown(MySchema)(parseResult.right));
+const decoded = yield * Effect.either(Schema.decodeUnknownEffect(MySchema)(parseResult.right));
 if (Either.isLeft(decoded)) return Option.none();
 return Option.some(decoded.right);
 
-// Good: Schema.parseJson fuses parse + decode into one schema
-return yield* pipe(
-  Schema.decodeUnknown(Schema.parseJson(MySchema))(content),
-  Effect.option,
+// Good: Schema.fromJsonString fuses parse + decode into one schema
+return (
+  yield * pipe(Schema.decodeUnknownEffect(Schema.fromJsonString(MySchema))(content), Effect.option)
 );
 ```
 
-`Schema.parseJson(Inner)` returns a schema whose input is a string. Decoding it runs `JSON.parse` and validates the result in a single `ParseError` channel. Combined with `Effect.option`, the whole "read + parse + validate or fall back" pipeline collapses to one line.
+`Schema.fromJsonString(Inner)` returns a schema whose input is a string. Decoding it runs `JSON.parse` and validates the result in a single `ParseError` channel. Combined with `Effect.option`, the whole "read + parse + validate or fall back" pipeline collapses to one line.
 
 The `no-manual-json-decode` rule catches `Effect.try({ try: () => JSON.parse(...) })` and its shorthand. See also `no-json-parse-without-schema` (catches bare `JSON.parse` outside a `Schema.decode*` wrapper) and `docs/patterns/data-validation.md`.
 
@@ -619,23 +637,24 @@ The `no-manual-json-decode` rule catches `Effect.try({ try: () => JSON.parse(...
 
 ### Effect rules (`rules/effect/`) -- apply to `apps/**` and `packages/**`:
 
-| Rule                      | Severity | What it catches                                                                                                                              |
-| ------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `no-throw-in-effect`      | error    | `throw` inside `Effect.gen` -- use `Effect.fail`                                                                                             |
-| `no-try-catch`            | error    | `try-catch` in Effect code -- use `Effect.try` or `Effect.catchTag`                                                                          |
-| `no-manual-tag-check`     | warning  | Manual `._tag` checking -- use `Effect.catchTag` or `Match`                                                                                  |
-| `no-direct-fs`            | error    | `import from "node:fs"` -- use Effect's `FileSystem` service                                                                                 |
-| `use-tagged-error`        | error    | `extends Error` -- use `Data.TaggedError`                                                                                                    |
-| `no-bare-new-error`       | error    | `new Error(...)` -- use tagged/domain error types                                                                                            |
-| `no-console-log`          | error    | `console.log/warn/error/info` -- use `Effect.log`/`logWarning`/`logError`                                                                    |
-| `no-runpromise-in-effect` | error    | `Effect.runPromise`/`runSync` -- use `yield*` inside Effect; `Runtime.runPromise` at boundary files only (see `docs/patterns/boundaries.md`) |
-| `no-silent-catch`         | error    | `Effect.catchAll(() => Effect.succeed(...))` without logging -- no silent error swallowing                                                   |
-| `no-interface-in-models`  | error    | `export interface` in models -- use `Schema.Struct` for domain types                                                                         |
-| `no-unsafe-typecast-at-boundary` | error | `as` casts on JSON.parse, .json(), .text(), .body -- use `Schema.decodeUnknown` (see `docs/patterns/data-validation.md`)              |
-| `no-json-parse-without-schema`   | error | Bare `JSON.parse` without `Schema.decode*` wrapper -- validate parsed data through Schema                                             |
-| `no-typed-boundary-assignment`   | error | Typed variable assignment from JSON.parse, .json(), .body -- decode first, then assign                                                |
-| `no-fetch-in-effect`      | error    | `Effect.tryPromise` wrapping `fetch(...)` -- use `@effect/platform`'s `HttpClient`                                                            |
-| `no-manual-json-decode`   | error    | `Effect.try({ try: () => JSON.parse(...) })` -- use `Schema.parseJson(Inner)` to fuse parse + decode                                           |
+| Rule                             | Severity | What it catches                                                                                                                |
+| -------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `no-throw-in-effect`             | error    | `throw` inside `Effect.gen` -- use `Effect.fail`                                                                               |
+| `no-try-catch`                   | error    | `try-catch` in Effect code -- use `Effect.try` or `Effect.catchTag`                                                            |
+| `no-manual-tag-check`            | warning  | Manual `._tag` checking -- use `Effect.catchTag` or `Match`                                                                    |
+| `no-direct-fs`                   | error    | `import from "node:fs"` -- use Effect's `FileSystem` service                                                                   |
+| `use-tagged-error`               | error    | `extends Error` -- use `Schema.TaggedErrorClass`                                                                               |
+| `no-bare-new-error`              | error    | `new Error(...)` -- use tagged/domain error types                                                                              |
+| `no-console-log`                 | error    | `console.log/warn/error/info` -- use `Effect.log`/`logWarning`/`logError`                                                      |
+| `no-runpromise-in-effect`        | error    | `Effect.runPromise`/`runSync` inside Effect code -- use `yield*`; at framework boundaries use a `ManagedRuntime` instance      |
+| `no-silent-catch`                | error    | `Effect.catch(() => Effect.succeed(...))` without logging -- no silent error swallowing                                        |
+| `no-effect-v3-apis`              | error    | Common v3 APIs (`Context.Tag`, `catchAll`, `Schema.parseJson`, etc.) in v4 code                                                |
+| `no-interface-in-models`         | error    | `export interface` in models -- use `Schema.Struct` for domain types                                                           |
+| `no-unsafe-typecast-at-boundary` | error    | `as` casts on JSON.parse, .json(), .text(), .body -- use `Schema.decodeUnknownEffect` (see `docs/patterns/data-validation.md`) |
+| `no-json-parse-without-schema`   | error    | Bare `JSON.parse` without `Schema.decode*` wrapper -- validate parsed data through Schema                                      |
+| `no-typed-boundary-assignment`   | error    | Typed variable assignment from JSON.parse, .json(), .body -- decode first, then assign                                         |
+| `no-fetch-in-effect`             | error    | `Effect.tryPromise` wrapping `fetch(...)` -- use Effect's `HttpClient`                                                         |
+| `no-manual-json-decode`          | error    | `Effect.try({ try: () => JSON.parse(...) })` -- use `Schema.fromJsonString(Inner)` to fuse parse + decode                      |
 
 **After writing any code**, run `ast-grep scan` from the repo root to check for these anti-patterns.
 
@@ -643,10 +662,10 @@ The `no-manual-json-decode` rule catches `Effect.try({ try: () => JSON.parse(...
 
 | Pattern                    | Module   | Purpose                                |
 | -------------------------- | -------- | -------------------------------------- |
-| `Data.TaggedError`         | `effect` | Custom error types with context        |
-| `Schema.ErrorClass`        | `effect` | Serializable errors (API, RPC, queues) |
+| `Schema.TaggedErrorClass`  | `effect` | Custom error types with context        |
+| `Schema.ErrorClass`        | `effect` | Protocol errors (HTTP API, RPC)        |
 | `Data.taggedEnum`          | `effect` | Discriminated unions (`$match`, `$is`) |
-| `Context.Tag`              | `effect` | Service definition                     |
+| `Context.Service`          | `effect` | Service definition                     |
 | `Layer.effect`             | `effect` | Creating service layers                |
 | `Effect.gen`               | `effect` | Composing effects                      |
 | `Effect.fail`              | `effect` | Return typed error                     |
@@ -657,8 +676,8 @@ The `no-manual-json-decode` rule catches `Effect.try({ try: () => JSON.parse(...
 | `Effect.catchTag`          | `effect` | Handle specific error by tag           |
 | `Effect.catchTags`         | `effect` | Handle multiple error tags at once     |
 | `Effect.catchIf`           | `effect` | Handle errors matching a predicate     |
-| `Effect.catchAll`          | `effect` | Handle all remaining errors            |
-| `Effect.catchAllCause`     | `effect` | Handle all errors including defects    |
+| `Effect.catch`             | `effect` | Handle all remaining errors            |
+| `Effect.catchCause`        | `effect` | Handle all errors including defects    |
 | `Effect.either`            | `effect` | Lift errors into Either                |
 | `Either.isLeft/isRight`    | `effect` | Branch on Either values                |
 | `Either.match`             | `effect` | Handle both Either branches            |
@@ -669,9 +688,8 @@ The `no-manual-json-decode` rule catches `Effect.try({ try: () => JSON.parse(...
 | `Option.fromNullable`      | `effect` | Nullable to Option                     |
 | `Match.value`              | `effect` | Pattern matching on values             |
 | `Match.tag`                | `effect` | Match tagged union variants            |
-| `Runtime.runPromise`       | `effect` | Execute in async contexts              |
 | `ManagedRuntime.make`      | `effect` | Shared configured runtime              |
 | `Effect.all` (concurrency) | `effect` | Parallel execution control             |
-| `Effect.forkDaemon`        | `effect` | Background fire-and-forget             |
+| `Effect.forkDetach`        | `effect` | Background fire-and-forget             |
 | `Effect.tap` / `tapError`  | `effect` | Side effects in pipelines              |
 | `Layer.merge`              | `effect` | Override single service in layer stack |

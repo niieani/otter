@@ -3,10 +3,10 @@
 id: no-silent-catch
 language: tsx
 severity: error
-message: "Silent error swallowing - log the error before recovering with Effect.catchAll"
+message: "Silent error swallowing - log the error before recovering with Effect.catch"
 
 rule:
-  pattern: Effect.catchAll($FN)
+  pattern: Effect.catch($FN)
   has:
     any:
       - pattern: Effect.succeed($$$VAL)
@@ -29,24 +29,24 @@ files:
   - "packages/**/*.tsx"
 
 note: |
-  Silently swallowing errors with Effect.catchAll hides failures and makes
+  Silently swallowing errors with Effect.catch hides failures and makes
   debugging impossible. Always log the error before recovering.
 
   Example:
   ```typescript
   // ❌ Bad - error silently disappears
-  Effect.catchAll(() => Effect.succeed([]))
+  Effect.catch(() => Effect.succeed([]))
 
   // ✅ Good - log before recovering
-  Effect.catchAll((err) =>
+  Effect.catch((err) =>
     Effect.logWarning("Falling back due to error", err).pipe(
       Effect.map(() => []),
     ),
   )
 
-  // ✅ Good - use tapError + catchAll
+  // ✅ Good - use tapError + catch
   Effect.tapError((err) => Effect.logWarning("Recovering from", err)),
-  Effect.catchAll(() => Effect.succeed([])),
+  Effect.catch(() => Effect.succeed([])),
 
   // ✅ Good - catch specific errors instead
   Effect.catchTag("NetworkError", (err) =>
